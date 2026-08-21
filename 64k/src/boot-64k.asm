@@ -1,5 +1,5 @@
 ;
-; PC-8001mkII CP/M-80 2.2 cold boot loader
+; PC-8001mkII 64k CP/M-80 cold boot loader
 ;
 
         org     0c000h

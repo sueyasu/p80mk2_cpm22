@@ -1,5 +1,5 @@
 ;
-; PC-8001mkII CP/M-80 2.2 BIOS
+; PC-8001mkII 64k CP/M-80 BIOS
 ;
 
 msize   equ     64
@@ -28,7 +28,7 @@ ramtrk  equ     06000h
 systrk  equ     0
 syssec  equ     2
 sysblk  equ     22
-offtrk  equ     4
+offtrk  equ     5
 dsm     equ     159-offtrk
 
         org     bios

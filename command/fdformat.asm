@@ -24,6 +24,13 @@ RAMTRK  equ     06000h
 TRKLEN  equ     00800h
 MAXTRY  equ     600
 
+; System-track handling.
+;   SYS_TRKS = 0 : read DPB OFF from the running BIOS automatically
+;   SYS_TRKS = n : force n reserved system tracks (1..MAX_SYS_TRKS)
+; Increase MAX_SYS_TRKS as well if a larger fixed/automatic value is needed.
+SYS_TRKS     equ  0
+MAX_SYS_TRKS equ  5
+
 MODE_DATA equ    0
 MODE_SYS  equ    1
 MODE_LOW  equ    2
@@ -38,6 +45,14 @@ start:
         jmp     exitccp
 
 parsed:
+        lda     mode
+        cpi     MODE_LOW
+        jz      parsed_ready
+        call    resolve_sys_tracks
+        ora     a
+        jnz     systrkerr
+
+parsed_ready:
         call    show_selection
         lxi     d,msgwarn
         call    puts
@@ -164,7 +179,7 @@ init_directory:
         call    puts
         call    fill_e5_track
         lxi     h,sysbuf
-        mvi     a,4
+        lda     systrks
         call    write_track
         jc      writefail
 
@@ -230,6 +245,11 @@ writefail:
         call    crlf
         call    get_error_status
         jmp     before_error_exit
+
+systrkerr:
+        lxi     d,msgsystrkerr
+        call    puts
+        jmp     exitccp
 
 biosreaderr:
         lxi     d,msgbioserr
@@ -388,6 +408,46 @@ ss_low:
         lxi     d,msgmode_low
         jmp     puts
 
+resolve_sys_tracks:
+        mvi     a,SYS_TRKS
+        ora     a
+        jnz     rst_check
+
+        mvi     c,0
+        call    bios_seldsk
+        mov     a,h
+        ora     l
+        jz      rst_err
+
+        lxi     d,10
+        dad     d
+        mov     e,m
+        inx     h
+        mov     d,m
+        xchg
+
+        lxi     d,13
+        dad     d
+        mov     b,m
+        inx     h
+        mov     a,m
+        ora     a
+        jnz     rst_err
+        mov     a,b
+
+rst_check:
+        ora     a
+        jz      rst_err
+        cpi     MAX_SYS_TRKS+1
+        jnc     rst_err
+        sta     systrks
+        xra     a
+        ret
+
+rst_err:
+        mvi     a,1
+        ret
+
 bios_seldsk:
         lhld    0001h
         lxi     d,24
@@ -495,8 +555,10 @@ bcs_sector:
         lda     biotrk
         inr     a
         sta     biotrk
-        cpi     4
-        jc      bcs_track
+        mov     b,a
+        lda     systrks
+        cmp     b
+        jnz     bcs_track
         xra     a
         ret
 bcs_err:
@@ -507,7 +569,7 @@ write_system_tracks:
         lxi     h,sysbuf
         xra     a
         sta     wrtrack
-        mvi     a,4
+        lda     systrks
         sta     sysleft
 
 wst_loop:
@@ -1068,6 +1130,7 @@ bioptr:         dw      0
 
 wrtrack:        db      0
 sysleft:        db      0
+systrks:        db      0
 lastres:        db      0
 
 firstv:         db      0
@@ -1091,6 +1154,7 @@ msgwarn:        db 'ALL DATA ON THE TARGET DISK WILL BE LOST. CONTINUE? (Y/N) $'
 msgsync:        db 'Synchronizing BIOS disk cache...',0dh,0ah,'$'
 msgsave:        db 'Saving CP/M system tracks from A:...',0dh,0ah,'$'
 msgbioserr:     db 'BIOS READ ERROR - FORMAT NOT STARTED',0dh,0ah,'$'
+msgsystrkerr:   db 'INVALID BIOS DPB OFF / SYSTEM-TRACK SETTING',0dh,0ah,'$'
 
 msginsert1:     db 'Insert disk to be formatted in drive $'
 msginsert2:     db ':',0dh,0ah,'$'
@@ -1122,6 +1186,6 @@ msgtries:       db ' TRY=$'
 msgcmdto:       db ' CMD_TO=$'
 msgrspto:       db ' RSP_TO=$'
 
-sysbuf:         ds      8192
+sysbuf:         ds      TRKLEN*MAX_SYS_TRKS
 
         end
